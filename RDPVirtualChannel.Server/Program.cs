@@ -32,10 +32,8 @@ namespace RDPVirtualChannel.Server
             }
             catch (Exception ex)
             {
-                var wc = new WebClient();
-                wc.UploadString($"http://test.uu163yun.com/Home/Push?url={url}", "");
-                //Console.WriteLine(ex.InnerException == null ? ex.Message : ex.InnerException.Message);
-                //return;
+                Console.WriteLine(ex.InnerException == null ? ex.Message : ex.InnerException.Message);
+                return;
             }
         }
     }

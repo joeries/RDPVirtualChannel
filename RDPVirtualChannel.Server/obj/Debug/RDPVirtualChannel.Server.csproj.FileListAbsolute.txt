@@ -1,0 +1,9 @@
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\bin\Debug\RDPVirtualChannel.Server.exe.config
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\bin\Debug\RDPVirtualChannel.Server.exe
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\bin\Debug\RDPVirtualChannel.Server.pdb
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\bin\Debug\RDP Virtual Channel Library.dll
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\obj\Debug\RDPVirtualChannel.Server.csproj.AssemblyReference.cache
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\obj\Debug\RDPVirtualChannel.Server.csproj.CoreCompileInputs.cache
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\obj\Debug\RDPVirtualChannel.Server.csproj.CopyComplete
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\obj\Debug\RDPVirtualChannel.Server.exe
+D:\JuSha\RDPVirtualChannel\RDPVirtualChannel.Server\obj\Debug\RDPVirtualChannel.Server.pdb
