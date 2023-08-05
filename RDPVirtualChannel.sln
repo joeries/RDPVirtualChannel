@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33110.190
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RDPVirtualChannel.Server", "RDPVirtualChannel.Server\RDPVirtualChannel.Server.csproj", "{44BBCF24-3599-43E2-88E2-328B33842FC9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RDPVirtualChannel.Client", "RDPVirtualChannel.Client\RDPVirtualChannel.Client.csproj", "{B679DDE2-7413-4E0F-ACCA-BF1400B4F0AE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{44BBCF24-3599-43E2-88E2-328B33842FC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44BBCF24-3599-43E2-88E2-328B33842FC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44BBCF24-3599-43E2-88E2-328B33842FC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44BBCF24-3599-43E2-88E2-328B33842FC9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B679DDE2-7413-4E0F-ACCA-BF1400B4F0AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B679DDE2-7413-4E0F-ACCA-BF1400B4F0AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B679DDE2-7413-4E0F-ACCA-BF1400B4F0AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B679DDE2-7413-4E0F-ACCA-BF1400B4F0AE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F46DA381-1091-45FA-8BB7-69D91542E78C}
+	EndGlobalSection
+EndGlobal
