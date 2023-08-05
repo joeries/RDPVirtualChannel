@@ -1,0 +1,506 @@
+
+
+<html xmlns="http://www.w3.org/1999/xhtml" >
+<body>
+    <span id="ArticleContent">
+<UL class=download>
+<LI><A href="TSAddinInCS/TSAddinInCS_src.zip">Download source files - 24 Kb</A> </LI></UL>
+<H2>Introduction</H2>Sometimes you need to write an extension to Terminal Services (if you have used it). So why don't you write it in your favorite programming language (for me, it's C#)? 
+<H2>Background</H2>
+<P>Why&nbsp;am I&nbsp;playing with TS? How it started? Well ...</P>
+<P>In our firm, almost everyone (about 120+) work on TS. We have a thirrd party ERP system installed on our servers and there is an export funtion using Excel automation. Now is the question: how to use this functionality without spending money on&nbsp;<STRONG>two</STRONG> licenses for Excel for every user (that's right, in this case, all users should have license on both the server and the workstation)? The answer is: write an application which can provide the same (or at least what they are using) automation as Excel, and can build Excel files and send&nbsp;them to the client. The first version&nbsp;I wrote is based on exporting source-code from the ERP's producent (good to have friends there), and it&nbsp;was sending files via SMTP to the client, and it was written in ATL/WTL. But&nbsp;I knew the export source-code so&nbsp;I knew which object from Excel they (ERP's producent) were using.</P>
+<P>After a few months,&nbsp;I found a way to send files over RDP. The application worked for more than a year. ... and then they changed the export code. After reading a great article about <A href="BuildCOMServersInDotNet.asp">Building COM Servers in .NET</A>, I decided to move this application to .NET. I found&nbsp;a way to get to know what functions/methods and objects they were using (<CODE>IExpando</CODE> from .NET&nbsp;and COM's <CODE>IDispatchEx</CODE>) and implement them. I thought, why&nbsp;not move the whole project to .NET, not&nbsp;just the&nbsp;server side. Well, I <A href="DllExport.asp">tried</A>.<BR><BR>So back on topic ... this article will not be about how to write Excel-like automation stuff. But how to write server/client side add-ins in C#. 
+<H2>What should you know?</H2>What exacly this sample application will do: The server side: 
+<UL>
+<LI>picks up a text file 
+<LI>reads it 
+<LI>commpresses it using <CODE>System.IO.Compression</CODE> 
+<LI>sends it over RDP </LI></UL>The client side: 
+<UL>
+<LI>be ready for open RDP channels 
+<LI>opens it 
+<LI>reads data 
+<LI>decompresses 
+<LI>saves as text file 
+<LI>and opens it in the default application for the <EM>txt</EM> extension </LI></UL>You'll find it useful when: 
+<UL>
+<LI>you know how to write such an extension in pure Win32 API 
+<LI>you want to write this in C# </LI></UL>
+<H2>Using the code</H2>
+<H3>Server side</H3>Well, it will be easy... all we have to do is import a few functions from <EM>wtsapi32.dll</EM> and use them in our application. <PRE lang=C++>//The WTSVirtualChannelOpen function opens a handle
+
+//to the server end of a specified virtual channel
+
+HANDLE WTSVirtualChannelOpen(HANDLE hServer, DWORD SessionId, 
+                             LPSTR pVirtualName);
+
+//The WTSVirtualChannelWrite function writes data 
+
+//to the server end of a virtual channel
+
+BOOL WTSVirtualChannelWrite(HANDLE hChannelHandle, PCHAR Buffer, 
+                            ULONG Length, PULONG pBytesWritten);
+
+//The WTSVirtualChannelClose function closes an open virtual channel handle.
+
+BOOL WTSVirtualChannelClose(HANDLE hChannelHandle);</PRE>
+<P>In C#, they look like this:</P><PRE lang=cs>using System;
+using System.Runtime.InteropServices;
+
+class WtsApi32
+{
+    [DllImport(&quot;Wtsapi32.dll&quot;)]
+    public static extern IntPtr WTSVirtualChannelOpen(IntPtr server, 
+        int sessionId, [MarshalAs(UnmanagedType.LPStr)] string virtualName);
+
+    [DllImport(&quot;Wtsapi32.dll&quot;, SetLastError = true)]
+    public static extern bool WTSVirtualChannelWrite(IntPtr channelHandle, 
+           byte[] buffer, int length, ref int bytesWritten);
+
+    [DllImport(&quot;Wtsapi32.dll&quot;, SetLastError = true)]
+    public static extern bool WTSVirtualChannelRead(IntPtr channelHandle, 
+           byte[] buffer, int length, ref int bytesReaded);
+
+    [DllImport(&quot;Wtsapi32.dll&quot;)]
+    public static extern bool WTSVirtualChannelClose(IntPtr channelHandle);
+}</PRE>
+<P>Now sending the data:</P><PRE lang=cs>byte[] data = PseudoClass.GetSomeData();
+//remeber that VirtualName should have 7 or less signs
+
+IntPtr mHandle = WtsApi32.WTSVirtualChannelOpen(IntPtr.Zero, -1, &quot;TSCS&quot;);
+int written = 0;
+bool ret = WtsApi32.WTSVirtualChannelWrite(mHandle, data, 
+           data.Length, ref written);
+if (!ret || written == gziped.Length)
+    MessageBox.Show(&quot;Sent!&quot;, &quot;OK&quot;, MessageBoxButtons.OK, 
+                    MessageBoxIcon.Information);
+else
+    MessageBox.Show(&quot;Bumm! Somethings gone wrong!&quot;, &quot;Error&quot;, 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+ret = WtsApi32.WTSVirtualChannelClose(mHandle);</PRE>
+<P>Off we go ... data sent (well, only when we correct the setup client-side stuff).</P>
+<H3>Client side</H3>
+<P>What sits on the client side? Well, the&nbsp;client side is a&nbsp;DLL which exports&nbsp;a funtion on the first place in the export table.</P><PRE lang=c++>BOOL VCAPITYPE VirtualChannelEntry(PCHANNEL_ENTRY_POINTS pEntryPoints);</PRE>
+<P>We will also need a definition for this:</P><PRE lang=c++>typedef struct tagCHANNEL_ENTRY_POINTS {
+  DWORD cbSize;
+  DWORD protocolVersion;
+  PVIRTUALCHANNELINIT pVirtualChannelInit;
+  PVIRTUALCHANNELOPEN pVirtualChannelOpen;
+  PVIRTUALCHANNELCLOSE pVirtualChannelClose;
+  PVIRTUALCHANNELWRITE pVirtualChannelWrite;
+} CHANNEL_ENTRY_POINTS, *PCHANNEL_ENTRY_POINTS;
+
+typedef UINT VCAPITYPE VIRTUALCHANNELINIT(
+  LPVOID FAR * ppInitHandle,
+  PCHANNEL_DEF pChannel,
+  INT channelCount,
+  ULONG versionRequested,
+  PCHANNEL_INIT_EVENT_FN pChannelInitEventProc
+);
+
+UINT VCAPITYPE VirtualChannelOpen(
+  LPVOID pInitHandle,
+  LPDWORD pOpenHandle,
+  PCHAR pChannelName,
+  PCHANNEL_OPEN_EVENT_FN pChannelOpenEventProc
+);
+
+UINT VCAPITYPE VirtualChannelClose(
+  DWORD openHandle
+);
+
+UINT VCAPITYPE VirtualChannelWrite(
+  DWORD openHandle,
+  LPVOID pData,
+  ULONG dataLength,
+  LPVOID pUserData
+);</PRE>
+<P>OMG!!! pointer to functions.. it doesn't look good. Well, maybe, but delegates from .NET are actually functions pointers so ... we will try to wrap all this stuf into some class.</P><PRE lang=cs>
+using System;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using Microsoft.Win32;
+using System.Text;
+using System.Threading;
+
+namespace Win32
+{
+    namespace WtsApi32
+    {            
+        public delegate ChannelReturnCodes
+            VirtualChannelInitDelegate(ref IntPtr initHandle,
+            ChannelDef[] channels, int channelCount, int versionRequested,
+            [MarshalAs(UnmanagedType.FunctionPtr)]
+            ChannelInitEventDelegate channelInitEventProc);
+        public delegate ChannelReturnCodes
+            VirtualChannelOpenDelegate(IntPtr initHandle, ref int openHandle,
+            [MarshalAs(UnmanagedType.LPStr)] string channelName,
+            [MarshalAs(UnmanagedType.FunctionPtr)]
+            ChannelOpenEventDelegate channelOpenEventProc);
+        public delegate ChannelReturnCodes
+            VirtualChannelCloseDelegate(int openHandle);
+        public delegate ChannelReturnCodes
+            VirtualChannelWriteDelegate(int openHandle, byte[] data,
+            uint dataLength, IntPtr userData);
+
+        public delegate void ChannelInitEventDelegate(IntPtr initHandle,
+            ChannelEvents Event,
+            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 3)]
+            byte[] data, int dataLength);
+        public delegate void ChannelOpenEventDelegate(int openHandle,
+            ChannelEvents Event,
+            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 3)] byte[] data,
+            int dataLength, uint totalLength, ChannelFlags dataFlags);
+
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ChannelEntryPoints
+        {
+            public int Size;
+            public int ProtocolVersion;
+            [MarshalAs(UnmanagedType.FunctionPtr)]
+            public VirtualChannelInitDelegate VirtualChannelInit;
+            [MarshalAs(UnmanagedType.FunctionPtr)]
+            public VirtualChannelOpenDelegate VirtualChannelOpen;
+            [MarshalAs(UnmanagedType.FunctionPtr)]
+            public VirtualChannelCloseDelegate VirtualChannelClose;
+            [MarshalAs(UnmanagedType.FunctionPtr)]
+            public VirtualChannelWriteDelegate VirtualChannelWrite;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+        public struct ChannelDef
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8)]
+            public string name;
+            public ChannelOptions options;
+        }
+
+        public enum ChannelEvents
+        {
+            Initialized = 0,
+            Connected = 1,
+            V1Connected = 2,
+            Disconnected = 3,
+            Terminated = 4,
+            DataRecived = 10,
+            WriteComplete = 11,
+            WriteCanceled = 12
+        }
+
+        [Flags]
+        public enum ChannelFlags
+        {
+            First = 0x01,
+            Last = 0x02,
+            Only = First | Last,
+            Middle = 0,
+            Fail = 0x100,
+            ShowProtocol = 0x10,
+            Suspend = 0x20,
+            Resume = 0x40
+        }
+
+        [Flags]
+        public enum ChannelOptions : uint
+        {
+            Initialized = 0x80000000,
+            EncryptRDP = 0x40000000,
+            EncryptSC = 0x20000000,
+            EncryptCS = 0x10000000,
+            PriorityHigh = 0x08000000,
+            PriorityMedium = 0x04000000,
+            PriorityLow = 0x02000000,
+            CompressRDP = 0x00800000,
+            Compress = 0x00400000,
+            ShowProtocol = 0x00200000
+        }
+
+        public enum ChannelReturnCodes
+        {
+            Ok = 0,
+            AlreadyInitialized = 1,
+            NotInitialized = 2,
+            AlreadyConnected = 3,
+            NotConnected = 4,
+            TooManyChanels = 5,
+            BadChannel = 6,
+            BadChannelHandle = 7,
+            NoBuffer = 8,
+            BadInitHandle = 9,
+            NotOpen = 10,
+            BadProc = 11,
+            NoMemory = 12,
+            UnknownChannelName = 13,
+            AlreadyOpen = 14,
+            NotInVirtualchannelEntry = 15,
+            NullData = 16,
+            ZeroLength = 17
+        }
+    }
+}</PRE>
+<P>OK.&nbsp;I wasn't so bad. Now, how simple the RDP client side&nbsp;DLL looks in C/C++:</P><PRE lang=c++>LPHANDLE              gphChannel;
+DWORD                 gdwOpenChannel;
+PCHANNEL_ENTRY_POINTS gpEntryPoints;
+
+void WINAPI VirtualChannelOpenEvent(DWORD openHandle, 
+     UINT event, LPVOID pdata, 
+     UINT32 dataLength, UINT32 totalLength, 
+     UINT32 dataFlags)
+{
+    switch(event)
+    {
+        case CHANNEL_EVENT_DATA_RECEIVED:
+        //readding data... and reading ... and reading
+
+        break;
+    }
+}
+
+VOID VCAPITYPE VirtualChannelInitEventProc(LPVOID pInitHandle, UINT event,
+                                           LPVOID pData, UINT dataLength)
+{
+    UINT  ui;
+    switch(event)
+    {
+        case CHANNEL_EVENT_INITIALIZED:
+            break;
+        case CHANNEL_EVENT_CONNECTED:
+            ui = gpEntryPoints-&gt;pVirtualChannelOpen(
+                 gphChannel,&amp;gdwOpenChannel, 
+                &quot;SAMPLE&quot;, (PCHANNEL_OPEN_EVENT_FN)VirtualChannelOpenEvent);
+            if (ui != CHANNEL_RC_OK)
+                MessageBox(NULL,TEXT(&quot;Open of RDP virtual &quot; 
+                          &quot;channel failed&quot;),TEXT(&quot;Sample App&quot;),MB_OK);
+            break;
+        case CHANNEL_EVENT_V1_CONNECTED:
+            MessageBox(NULL,TEXT(&quot;Connecting to a non Windows 2000 &quot; 
+                      &quot;Terminal Server&quot;), TEXT(&quot;Sample App&quot;),MB_OK);
+            break;
+        case CHANNEL_EVENT_DISCONNECTED:
+            break;
+        case CHANNEL_EVENT_TERMINATED:
+            LocalFree((HLOCAL)gpEntryPoints);
+            break;
+        default:
+            break;
+    }
+}
+
+BOOL VCAPITYPE VirtualChannelEntry(PCHANNEL_ENTRY_POINTS pEntryPoints)
+{
+    CHANNEL_DEF cd;
+    UINT        uRet;
+    gpEntryPoints = (PCHANNEL_ENTRY_POINTS) LocalAlloc(LPTR, 
+                                    pEntryPoints-&gt;cbSize);
+    CopyMemory(gpEntryPoints, pEntryPoints, pEntryPoints-&gt;cbSize);
+    ZeroMemory(&amp;cd, sizeof(CHANNEL_DEF));
+    CopyMemory(cd.name, &quot;SAMPLE&quot;, 6);
+    uRet = gpEntryPoints-&gt;pVirtualChannelInit((LPVOID *)&amp;gphChannel,
+       (PCHANNEL_DEF)&amp;cd, 
+        1, VIRTUAL_CHANNEL_VERSION_WIN2000,
+        (PCHANNEL_INIT_EVENT_FN)VirtualChannelInitEventProc);
+    if (uRet != CHANNEL_RC_OK)
+    {
+        MessageBox(NULL,TEXT(&quot;RDP Virtual channel Init Failed&quot;),
+                        TEXT(&quot;Sample App&quot;),MB_OK);
+        return FALSE;
+    }
+    if (cd.options != CHANNEL_OPTION_INITIALIZED)
+        return FALSE;
+    return TRUE;
+}</PRE>
+<P>After translaction to C#:</P><PRE lang=cs>using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+using Win32.WtsApi32;
+
+namespace TSAddinInCS
+{
+    public class TSAddinInCS
+    {   
+        static IntPtr Channel;
+        static ChannelEntryPoints entryPoints;
+        static int OpenChannel = 0;
+        //ATTENTION: name should have 7 or less signs
+        const string ChannelName = &quot;TSCS&quot;;
+        static Unpacker unpacker = null;
+        static ChannelInitEventDelegate channelInitEventDelegate = 
+            new ChannelInitEventDelegate(VirtualChannelInitEventProc);
+        static ChannelOpenEventDelegate channelOpenEventDelegate = 
+            new ChannelOpenEventDelegate(VirtualChannelOpenEvent);
+
+        [ExportDllAttribute.ExportDll(&quot;VirtualChannelEntry&quot;, 
+            System.Runtime.InteropServices.CallingConvention.StdCall)]
+        public static bool VirtualChannelEntry(ref ChannelEntryPoints entry)
+        {
+            ChannelDef[] cd = new ChannelDef[1];
+            cd[0] = new ChannelDef();
+            entryPoints = entry;
+            cd[0].name = ChannelName;
+            ChannelReturnCodes ret = entryPoints.VirtualChannelInit(
+                ref Channel, cd, 1, 1, channelInitEventDelegate);
+            if (ret != ChannelReturnCodes.Ok)
+                MessageBox.Show(&quot;TSAddinInCS: RDP Virtual channel&quot; 
+                                &quot; Init Failed.\n&quot; + ret.ToString(), 
+                                &quot;Error&quot;, MessageBoxButtons.OK, 
+                                 MessageBoxIcon.Error);
+                return false;
+            }
+            return true;
+        }
+
+        public static void VirtualChannelInitEventProc(IntPtr initHandle,
+            ChannelEvents Event, byte[] data, int dataLength)
+        {
+            switch (Event)
+            {
+                case ChannelEvents.Initialized:
+                    break;
+                case ChannelEvents.Connected:
+                    ChannelReturnCodes ret = entryPoints.VirtualChannelOpen(
+                        initHandle, ref OpenChannel, 
+                        ChannelName, channelOpenEventDelegate);
+                    if (ret != ChannelReturnCodes.Ok)
+                        MessageBox.Show(&quot;TSAddinInCS: Open of RDP &quot; + 
+                            &quot;virtual channel failed.\n&quot; + ret.ToString(), 
+                            &quot;Error&quot;, MessageBoxButtons.OK, 
+                             MessageBoxIcon.Error);
+                    else
+                    {
+                        string servername = System.Text.Encoding.Unicode.GetString(data);
+                        servername = servername.Substring(0, servername.IndexOf('\0'));
+                        //do something with server name
+                    }
+                    break;
+                case ChannelEvents.V1Connected:
+                    MessageBox.Show(&quot;TSAddinInCS: Connecting&quot; + 
+                        &quot; to a non Windows 2000 Terminal Server.&quot;, 
+                        &quot;Error&quot;, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    break;
+                case ChannelEvents.Disconnected:
+                    break;
+                case ChannelEvents.Terminated:
+                    GC.KeepAlive(channelInitEventDelegate);
+                    GC.KeepAlive(channelOpenEventDelegate);
+                    GC.KeepAlive(entryPoints);
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    break;
+            }
+        }
+
+        public static void VirtualChannelOpenEvent(int openHandle, 
+            ChannelEvents Event, byte[] data, 
+            int dataLength, uint totalLength, ChannelFlags dataFlags)
+        {        
+            switch (Event)
+            {
+                case ChannelEvents.DataRecived:
+                    switch (dataFlags &amp; ChannelFlags.Only)
+                    {
+                        case ChannelFlags.Only:
+                            //we are here becous first data is last too 
+
+                            //(totalLength == dataLength)
+
+                            //...do somthing with data
+
+                            break;
+                        case ChannelFlags.First:
+                            //first part of data arrived
+
+                            //...do somthing with data
+
+                            //(store 'coz it isn't all)
+
+                            break;
+                        case ChannelFlags.Middle:
+                            //...and still arriving
+
+                            //...do somthing with data
+
+                            //(store 'coz it isn't all)
+
+                            break;
+                        case ChannelFlags.Last:
+                            //...and still arriving
+
+                            //well maybe not still this is the last part
+
+                            //...do somthing with data (store)
+
+                            //now we have full data in store
+
+                            //we will do with it something more than storing
+
+                            break;
+                    }
+                    break;
+            }
+        }
+    }
+}</PRE>
+<H3>Is that all?</H3>(Isn't that a name of a U2 song? :)) Actually - No.. We didn't export the function ... or did we? <PRE lang=cs>[ExportDllAttribute.ExportDll(&quot;VirtualChannelEntry&quot;, 
+       System.Runtime.InteropServices.CallingConvention.StdCall)]</PRE>
+<P>What it means? Well, I&nbsp;have&nbsp;a tool which can help with exporting functions to unmanaged code. You can read about&nbsp;it <A href="DllExport.asp">here</A>. This tool is also included&nbsp;in the&nbsp;source (as a binary) and "added to post-build actions". 
+<H2>How to get it all work</H2>OK, now we have all pieces. The sample solution has&nbsp;two projects, the server and the client side and the ExportDLL tool, But it won't work hrhrhrhr :) We need to set it up first. What exacly do we need to run this: 
+<UL>
+<LI>A server (well, it can be Windows XP) working as the terminal server 
+<LI>A workstation with a TS client (<EM>mstsc.exe</EM>) </LI></UL>and files: 
+<UL>
+<LI><EM>TSAddinInCS.dll</EM> on the workstation 
+<LI><EM>TSAddinInCSServer.exe</EM> on the server </LI></UL>
+<H3>Setup</H3>Setting up the client (the server doesn't need setup) is easy: 
+<UL>
+<LI>Open regedit 
+<LI>Find HKEY_CURRENT_USER\Software\Microsoft\Terminal Server Client\Default\AddIns 
+<LI>Add a key <EM>TSAddinInCS</EM> 
+<LI>Add a key with a new string named "Name" to that key 
+<LI>Change the value of this string to "<EM>whole_path_to\TSAddinInCS.dll</EM>" </LI></UL>Or just make a <EM>.reg</EM> file with: <PRE lang=text>Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Microsoft\Terminal Server 
+  Client\Default\AddIns\TSAddinInCS]
+&quot;Name&quot;=&quot;C:\\Documents and Settings\\Selvin\\Pulpit\\TSAddinInCS 
+        \\Client\\bin\\Debug\\TSAddinInCS.dll&quot;</PRE>
+<P>changing <EM>C:\\Documents and Settings\\Selvin\\Pulpit\\TSAddinInCS\\Client\\bin\\Debug\\</EM> to the proper path. 
+<H3>Running</H3>Finally, we have to test it. Run <EM>mstsc.exe</EM>, connect to the server, run <EM>TSAddinInCSServer.exe</EM> on the server, hit the button, choose the file to send, and watch as this file opens on the local computer :) 
+<H2>References</H2>
+<UL>
+<LI><A href="http://www.microsoft.com/technet/archive/termsrv/maintain/featusability/tsrvapi.mspx?mfr=true" target=_blank>Using and Understanding APIs for the Terminal Server</A>
+<LI><A href="http://www.codeproject.com/dotnet/emilio_managed_unmanaged.asp">Unmanaged code can wrap managed methods</A> 
+<LI>Sample TS client code in C from MSDN's samples (now I don't know where exacly they are, prolly on my HD :)) </LI></UL>
+
+<h2>History</h2>
+<UL>
+<LI><B>14-11-2006 First version</B></LI>
+<LI><B>30-05-2008 Second version</B>
+<UL>
+<LI>IntPtr Data changed to byte[] data</LI>
+<LI>GC.KeepAlive() added</LI>
+<LI>sending files to server added(in source)</LI> 
+<LI>sample form and tray icon added(in source)</LI>
+</UL>
+</LI>
+</UL>
+<h2>Todo list</h2>
+<P>Add sending files to server description</P>
+<h2>Tips & Trics/Notes</h2>
+<P>Many people ask why mstsc.exe crashes when they are sending data to server</P>
+<P>The answer lies in too small read buffer on server side</P>
+from msdn:
+<PRE>
+<I>BufferSize</I>
+    Specifies the size, in bytes, of Buffer. If the client set the CHANNEL_OPTION_SHOW_PROTOCOL option, 
+    the value of this parameter should be at least CHANNEL_PDU_LENGTH. 
+    If the CHANNEL_OPTION_SHOW_PROTOCOL is not used, the value of this 
+    parameter should be at <B>least CHANNEL_CHUNK_LENGTH.</B>
+...
+</PRE>
+CHANNEL_CHUNK_LENGTH is definded as 1600
+
+</span>
+</body>
+</html>
